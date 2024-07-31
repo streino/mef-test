@@ -146,7 +146,10 @@ def put(filename,
     elif mode == 'records':
         #FIXME: Can't get it to work:
         #  {"message":"IllegalArgumentException","code":"unsatisfied_request_parameter","description":"A file MUST be provided."}
-        form_data = params | {'file': (filename, open(filename, 'rb'), 'application/zip')}
+        form_data = (
+            {k: (None, v) for k,v in params.items()}
+            | {'file': (filename, open(filename, 'rb'), 'application/zip')}
+        )
         r = session.post(f"{api}/records", auth=('admin', 'admin'),
                          headers=headers, files=form_data)
         print(r.text)
