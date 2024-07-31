@@ -100,15 +100,15 @@ def get(url='http://localhost:8080/geonetwork/srv',
             fd.write(chunk)
 
 
-@cli
+@cli('mode', choices=['record', 'records', 'mef'])
 def put(filename,
-        url='http://localhost:8080/geonetwork/srv',
-        mef=False):
+        mode='record',
+        url='http://localhost:8080/geonetwork/srv'):
     """Import MEF archive
 
     :filename: MEF archive filename.
+    :mode: Import mode.
     :url: Geonetwork URL, up to and including the `/srv` portion.
-    :mef: Use `/mef.import` API instead of `/records`.
     """
 
     api = f"{url}/api"
@@ -133,17 +133,25 @@ def put(filename,
     }
 
     print("Updating records...")
-    if mef:
-        #FIXME: can't get it to work:
-        #     Cannot build ServiceRequest
-        #     Cause : Error on line 1: Content is not allowed in prolog.
-        #     Error : org.jdom.input.JDOMParseException
+    if mode == 'mef':
+        #FIXME: Can't get it to work:
+        #  Cannot build ServiceRequest
+        #  Cause : Error on line 1: Content is not allowed in prolog.
+        #  Error : org.jdom.input.JDOMParseException
         r = session.post(f"{api}/mef.import", auth=('admin', 'admin'),
                          headers=headers, params=params|{'file_type': 'mef'},
                          files={'mefFile': (filename, open(filename, 'rb'))})
         print(r.text)
         r.raise_for_status()
-    else:
+    elif mode == 'records':
+        #FIXME: Can't get it to work:
+        #  {"message":"IllegalArgumentException","code":"unsatisfied_request_parameter","description":"A file MUST be provided."}
+        form_data = params | {'file': (filename, open(filename, 'rb'), 'application/zip')}
+        r = session.post(f"{api}/records", auth=('admin', 'admin'),
+                         headers=headers, files=form_data)
+        print(r.text)
+        r.raise_for_status()
+    elif mode == 'record':
         recs = mef_records(zipfile.Path(filename))
         i = 0
         for rec in recs:
