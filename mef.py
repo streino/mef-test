@@ -103,7 +103,13 @@ def get(url='http://localhost:8080/geonetwork/srv',
 @cli
 def put(filename,
         url='http://localhost:8080/geonetwork/srv',
-        dryrun=False):
+        mef=False):
+    """Import MEF archive
+
+    :filename: MEF archive filename.
+    :url: Geonetwork URL, up to and including the `/srv` portion.
+    :mef: Use `/mef.import` API instead of `/records`.
+    """
 
     api = f"{url}/api"
     session = requests.Session()
@@ -120,8 +126,6 @@ def put(filename,
         'X-XSRF-TOKEN': xsrf_token
     }
 
-    records = mef_records(zipfile.Path(filename))
-
     params = {
         'metadataType': 'METADATA',  #FIXME: set according to records' info.xml
         'uuidProcessing': 'OVERWRITE',
@@ -129,15 +133,27 @@ def put(filename,
     }
 
     print("Updating records...")
-    i = 0
-    for record in records:
-        print(record['id'])
-        data = record['path'].read_text()
-        r = session.put(f"{api}/records", auth=('admin', 'admin'),
-                        headers=headers, params=params, data=data)
+    if mef:
+        #FIXME: can't get it to work:
+        #     Cannot build ServiceRequest
+        #     Cause : Error on line 1: Content is not allowed in prolog.
+        #     Error : org.jdom.input.JDOMParseException
+        r = session.post(f"{api}/mef.import", auth=('admin', 'admin'),
+                         headers=headers, params=params|{'file_type': 'mef'},
+                         files={'mefFile': (filename, open(filename, 'rb'))})
+        print(r.text)
         r.raise_for_status()
-        i += 1
-    print(f"Updated {i} records")
+    else:
+        recs = mef_records(zipfile.Path(filename))
+        i = 0
+        for rec in recs:
+            print(rec['id'])
+            data = rec['path'].read_text()
+            r = session.put(f"{api}/records", auth=('admin', 'admin'),
+                            headers=headers, params=params, data=data)
+            r.raise_for_status()
+            i += 1
+        print(f"Updated {i} records")
 
 
 def query_records(metadata):
