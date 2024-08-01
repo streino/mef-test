@@ -11,6 +11,7 @@ BUCKET_BATCH_SIZE = 100
 
 @cli('format', choices=['simple', 'partial', 'full'])
 def get(url='http://localhost:8080/geonetwork/srv',
+        tag='',
         query=None,
         format='simple',
         limit=0,
@@ -20,6 +21,7 @@ def get(url='http://localhost:8080/geonetwork/srv',
     """Retrieve MEF archive
 
     :url: Geonetwork URL, up to and including the `/srv` portion.
+    :tag: Tag/label added to MEF archive filename.
     :query: Additionnal query params to $url/api/q, e.g. `_source=...,isHarvested=n,type=dataset`.
     :format: MEF format.
     :limit: Maximum number of records to retrieve in MEF archive.
@@ -99,9 +101,10 @@ def get(url='http://localhost:8080/geonetwork/srv',
         abort_on_error(r)
 
         print(f"[{i}/{n}] Retrieving {format} MEF archive ({len(r.json())} records)...")
+        tagname = f"-{tag}" if tag else ''
         timestamp = int(time.time())
         part = 'all' if n == 1 else f"{i:02}"
-        filename = f"export-{format}-{timestamp}-{part}.zip"
+        filename = f"export{tagname}-{format}-{timestamp}-{part}.zip"
 
         if dryrun:
             print(f"Would write {filename}")
