@@ -33,8 +33,8 @@ def get(url='http://localhost:8080/geonetwork/srv',
     # References:
     # - https://docs.geonetwork-opensource.org/3.12/fr/api/the-geonetwork-api/#connecting-to-the-api-with-python
     # - https://docs.geonetwork-opensource.org/4.4/fr/api/the-geonetwork-api/#connecting-to-the-api-with-python
-    r = session.post(f"{api}/info?type=me")
-    abort_on_error(r)
+    r = session.post(f"{url}/eng/info?type=me")
+    # don't abort on error here, it's expected...
     _ = get_cookie(r.cookies, 'JSESSIONID')
     xsrf_token = get_cookie(r.cookies, 'XSRF-TOKEN')
 
