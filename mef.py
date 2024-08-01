@@ -1,4 +1,5 @@
 import itertools
+import re
 import requests
 import sys
 import time
@@ -33,6 +34,7 @@ def get(url='http://localhost:8080/geonetwork/srv',
     # - https://docs.geonetwork-opensource.org/3.12/fr/api/the-geonetwork-api/#connecting-to-the-api-with-python
     # - https://docs.geonetwork-opensource.org/4.4/fr/api/the-geonetwork-api/#connecting-to-the-api-with-python
     r = session.post(f"{api}/info?type=me")
+    abort_on_error(r)
     _ = get_cookie(r.cookies, 'JSESSIONID')
     xsrf_token = get_cookie(r.cookies, 'XSRF-TOKEN')
 
@@ -57,10 +59,13 @@ def get(url='http://localhost:8080/geonetwork/srv',
     if magic:
         # Use the magic 'metadata' bucket to get ids
         r = session.get(f"{api}/q", headers=headers, params=q_params)
+        abort_on_error(r)
         # PUT with no ids => bucket is automagically filled with all matching ids
         # from the last query in session
-        session.put(f"{api}/selections/metadata", headers=headers)
+        r = session.put(f"{api}/selections/metadata", headers=headers)
+        abort_on_error(r)
         r = session.get(f"{api}/selections/metadata", headers=headers)
+        abort_on_error(r)
         ids = r.json()
         if limit and len(ids) >= limit:
             ids = ids[:limit]
@@ -69,6 +74,7 @@ def get(url='http://localhost:8080/geonetwork/srv',
         to = 0
         while True:
             r = session.get(f"{api}/q", headers=headers, params=q_params|{'from': to+1})
+            abort_on_error(r)
             rsp = r.json()
             to = int(rsp.get('@to'))
             newids = [record.get('uuid') for record in query_records(rsp.get('metadata', []))]
@@ -82,10 +88,12 @@ def get(url='http://localhost:8080/geonetwork/srv',
 
     # Populate our named bucket
     for batch in itertools.batched(ids, BATCH_SIZE):
-        session.put(f"{api}/selections/{bucket}", headers=headers, params={'uuid': list(batch)})
+        r = session.put(f"{api}/selections/{bucket}", headers=headers, params={'uuid': list(batch)})
+        abort_on_error(r)
 
     #FIXME: Remove when sure bucket is always set
     r = session.get(f"{api}/selections/{bucket}", headers=headers)
+    abort_on_error(r)
     print(f"Safety check: bucket contains {len(r.json())} records")
 
     if dryrun:
@@ -95,11 +103,13 @@ def get(url='http://localhost:8080/geonetwork/srv',
     r = session.get(f"{api}/mef.export", stream=True,
                     headers={'Accept': 'application/zip', 'X-XSRF-TOKEN': xsrf_token},
                     params={'version': '2', 'format': format, 'bucket': bucket})
+    abort_on_error(r)
     
     filename = f"export-{format}-{int(time.time())}.zip"
     with open(filename, 'wb') as fd:
         for chunk in r.iter_content(chunk_size=128):
             fd.write(chunk)
+
     print(f"Wrote {filename}")
 
 
@@ -118,6 +128,7 @@ def put(filename,
     session = requests.Session()
 
     r = session.post(f"{api}/info?type=me")
+    abort_on_error(r)
     xsrf_token = r.cookies.get('XSRF-TOKEN')
     if not xsrf_token:
         # Seems this is not important...
@@ -144,8 +155,7 @@ def put(filename,
         r = session.post(f"{api}/mef.import", auth=('admin', 'admin'),
                          headers=headers, params=params|{'file_type': 'mef'},
                          files={'mefFile': (filename, open(filename, 'rb'))})
-        print(r.text)
-        r.raise_for_status()
+        abort_on_error(r)
     elif mode == 'records':
         #FIXME: Can't get it to work:
         #  {"message":"IllegalArgumentException","code":"unsatisfied_request_parameter","description":"A file MUST be provided."}
@@ -155,8 +165,7 @@ def put(filename,
         )
         r = session.post(f"{api}/records", auth=('admin', 'admin'),
                          headers=headers, files=form_data)
-        print(r.text)
-        r.raise_for_status()
+        abort_on_error(r)
     elif mode == 'record':
         recs = mef_records(zipfile.Path(filename))
         i = 0
@@ -165,7 +174,7 @@ def put(filename,
             data = rec['path'].read_text()
             r = session.put(f"{api}/records", auth=('admin', 'admin'),
                             headers=headers, params=params, data=data)
-            r.raise_for_status()
+            abort_on_error(r)
             i += 1
         print(f"Updated {i} records")
 
@@ -177,6 +186,26 @@ def get_cookie(jar, name):
     else:
         print(f"Warning: Unable to find {name}")
     return val
+
+def abort_on_error(r):
+    try:
+        r.raise_for_status()
+    except requests.exceptions.HTTPError as e:
+        print(e)
+        try:
+            # poor man's html stipping
+            m = re.search('<body>.*</body>', r.text, re.IGNORECASE | re.DOTALL)
+            print('---')
+            if m:
+                print(re.sub('<[^<]+?>', ' ', m[0]))
+            else:
+                try:
+                    print(r.json())
+                except requests.exceptions.JSONDecodeError:
+                    print(r.text)
+        except:
+            pass
+        sys.exit(1)
 
 def query_records(metadata):
     # Geonetwork $api/records/q json 'metadata' list is broken
