@@ -6,14 +6,15 @@ import time
 import zipfile
 from minicli import cli, run
 
-BATCH_SIZE = 100
+BUCKET_NAME = 'mef'
+BUCKET_BATCH_SIZE = 100
 
 @cli('format', choices=['simple', 'partial', 'full'])
 def get(url='http://localhost:8080/geonetwork/srv',
         query=None,
         format='simple',
         limit=0,
-        bucket='default',
+        batch=0,
         magic=True,
         dryrun=False):
     """Retrieve MEF archive
@@ -22,7 +23,7 @@ def get(url='http://localhost:8080/geonetwork/srv',
     :query: Additionnal query params to $url/api/q, e.g. `_source=...,isHarvested=n,type=dataset`.
     :format: MEF format.
     :limit: Maximum number of records to retrieve in MEF archive.
-    :bucket: Bucket name for selected records.
+    :batch: Retrieve results in batches (multiple MEF files).
     :magic: Retrieve record ids from magic `metadata` bucket.
     :dryrun: Dry-run mode.
     """
@@ -86,31 +87,36 @@ def get(url='http://localhost:8080/geonetwork/srv',
                 break
     print(f"Query returned {len(ids)} records")
 
-    # Populate our named bucket
-    for batch in itertools.batched(ids, BATCH_SIZE):
-        r = session.put(f"{api}/selections/{bucket}", headers=headers, params={'uuid': list(batch)})
+    mef_batches = [ids] if batch <= 0 else list(itertools.batched(ids, batch))
+    n = len(mef_batches)
+    for i, mef_batch in enumerate(mef_batches, start=1):
+        # Populate our named bucket iteratively to avoid 'request too long'
+        for b in itertools.batched(mef_batch, BUCKET_BATCH_SIZE):
+            r = session.put(f"{api}/selections/{BUCKET_NAME}", headers=headers, params={'uuid': list(b)})
+            abort_on_error(r)
+
+        r = session.get(f"{api}/selections/{BUCKET_NAME}", headers=headers)
         abort_on_error(r)
 
-    #FIXME: Remove when sure bucket is always set
-    r = session.get(f"{api}/selections/{bucket}", headers=headers)
-    abort_on_error(r)
-    print(f"Safety check: bucket contains {len(r.json())} records")
+        print(f"[{i}/{n}] Retrieving {format} MEF archive ({len(r.json())} records)...")
+        timestamp = int(time.time())
+        part = 'all' if n == 1 else f"{i:02}"
+        filename = f"export-{format}-{timestamp}-{part}.zip"
 
-    if dryrun:
-        return
+        if dryrun:
+            print(f"Would write {filename}")
+        else:
+            r = session.get(f"{api}/mef.export", stream=True,
+                            headers={'Accept': 'application/zip', 'X-XSRF-TOKEN': xsrf_token},
+                            params={'version': '2', 'format': format, 'bucket': BUCKET_NAME})
+            abort_on_error(r)
+            with open(filename, 'wb') as fd:
+                for chunk in r.iter_content(chunk_size=128):
+                    fd.write(chunk)
+            print(f"Wrote {filename}")
 
-    print(f"Retrieving {format} MEF archive...")
-    r = session.get(f"{api}/mef.export", stream=True,
-                    headers={'Accept': 'application/zip', 'X-XSRF-TOKEN': xsrf_token},
-                    params={'version': '2', 'format': format, 'bucket': bucket})
-    abort_on_error(r)
-    
-    filename = f"export-{format}-{int(time.time())}.zip"
-    with open(filename, 'wb') as fd:
-        for chunk in r.iter_content(chunk_size=128):
-            fd.write(chunk)
-
-    print(f"Wrote {filename}")
+        r = session.delete(f"{api}/selections/{BUCKET_NAME}", headers=headers)
+        abort_on_error(r)
 
 
 @cli('mode', choices=['record', 'records', 'mef'])
