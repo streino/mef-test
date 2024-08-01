@@ -31,9 +31,8 @@ def get(url='http://localhost:8080/geonetwork/srv',
     # - https://docs.geonetwork-opensource.org/3.12/fr/api/the-geonetwork-api/#connecting-to-the-api-with-python
     # - https://docs.geonetwork-opensource.org/4.4/fr/api/the-geonetwork-api/#connecting-to-the-api-with-python
     r = session.post(f"{api}/info?type=me")
-    xsrf_token = r.cookies.get('XSRF-TOKEN')
-    if not xsrf_token:
-        print("Warning: Unable to find the XSRF token")
+    _ = get_cookie(r.cookies, 'JSESSIONID')
+    xsrf_token = get_cookie(r.cookies, 'XSRF-TOKEN')
 
     headers = {
         'Accept': 'application/json',
@@ -166,6 +165,14 @@ def put(filename,
             i += 1
         print(f"Updated {i} records")
 
+
+def get_cookie(jar, name):
+    val = jar.get(name)
+    if val:
+        print(f"{name}={val}")
+    else:
+        print(f"Warning: Unable to find {name}")
+    return val
 
 def query_records(metadata):
     # Geonetwork $api/records/q json 'metadata' list is broken
