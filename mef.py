@@ -14,7 +14,7 @@ def get(url='http://localhost:8080/geonetwork/srv',
         query=None,
         format='simple',
         limit=0,
-        batch=0,
+        batch=500,
         magic=True,
         dryrun=False):
     """Retrieve MEF archive
