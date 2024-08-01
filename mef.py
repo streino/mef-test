@@ -200,7 +200,7 @@ def abort_on_error(r):
         print(e)
         try:
             # poor man's html stipping
-            m = re.search('<body>.*</body>', r.text, re.IGNORECASE | re.DOTALL)
+            m = re.search('<body[^>]*>.*</body>', r.text, re.IGNORECASE | re.DOTALL)
             print('---')
             if m:
                 print(re.sub('<[^<]+?>', ' ', m[0]))
