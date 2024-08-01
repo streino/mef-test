@@ -18,7 +18,7 @@ def get(url='http://localhost:8080/geonetwork/srv',
     """Retrieve MEF archive
 
     :url: Geonetwork URL, up to and including the `/srv` portion.
-    :query: Additionnal query params to $url/api/q, e.g. `_source=...,isHarveste=n,type=dataset`.
+    :query: Additionnal query params to $url/api/q, e.g. `_source=...,isHarvested=n,type=dataset`.
     :format: MEF format.
     :limit: Maximum number of records to retrieve in MEF archive.
     :bucket: Bucket name for selected records.
