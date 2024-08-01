@@ -7,9 +7,10 @@ from minicli import cli, run
 
 BATCH_SIZE = 100
 
-@cli
+@cli('format', choices=['simple', 'partial', 'full'])
 def get(url='http://localhost:8080/geonetwork/srv',
         query=None,
+        format='simple',
         limit=0,
         bucket='default',
         magic=True,
@@ -18,6 +19,7 @@ def get(url='http://localhost:8080/geonetwork/srv',
 
     :url: Geonetwork URL, up to and including the `/srv` portion.
     :query: Additionnal query params to $url/api/q, e.g. `_source=...,isHarveste=n,type=dataset`.
+    :format: MEF format.
     :limit: Maximum number of records to retrieve in MEF archive.
     :bucket: Bucket name for selected records.
     :magic: Retrieve record ids from magic `metadata` bucket.
@@ -89,12 +91,12 @@ def get(url='http://localhost:8080/geonetwork/srv',
     if dryrun:
         return
 
-    print(f"Retrieving MEF archive...")
+    print(f"Retrieving {format} MEF archive...")
     r = session.get(f"{api}/mef.export", stream=True,
                     headers={'Accept': 'application/zip', 'X-XSRF-TOKEN': xsrf_token},
-                    params = {'version': '2', 'format': 'simple', 'bucket': bucket})
+                    params={'version': '2', 'format': format, 'bucket': bucket})
     
-    filename = f"export-simple-{int(time.time())}.zip"
+    filename = f"export-{format}-{int(time.time())}.zip"
     with open(filename, 'wb') as fd:
         for chunk in r.iter_content(chunk_size=128):
             fd.write(chunk)
