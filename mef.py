@@ -94,9 +94,11 @@ def get(url='http://localhost:8080/geonetwork/srv',
                     headers={'Accept': 'application/zip', 'X-XSRF-TOKEN': xsrf_token},
                     params = {'version': '2', 'format': 'simple', 'bucket': bucket})
     
-    with open(f"export-simple-{int(time.time())}.zip", 'wb') as fd:
+    filename = f"export-simple-{int(time.time())}.zip"
+    with open(filename, 'wb') as fd:
         for chunk in r.iter_content(chunk_size=128):
             fd.write(chunk)
+    print(f"Wrote {filename}")
 
 
 @cli('mode', choices=['record', 'records', 'mef'])
